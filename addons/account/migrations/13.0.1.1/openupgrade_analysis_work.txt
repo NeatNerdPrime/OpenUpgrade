@@ -80,6 +80,7 @@ account      / account.invoice          / amount_total_signed (float)   : DEL
 account      / account.move             / amount_total_signed (float)   : NEW isfunction: function, stored
 # DONE: pre-migration: pre-created
 # DONE: post-migration: mapped
+# DONE: post-migration: Compute them for entry type
 
 account      / account.invoice          / amount_tax (float)            : DEL
 account_voucher / account.voucher          / tax_amount (float)            : DEL
@@ -212,7 +213,6 @@ account      / account.invoice          / partner_id (many2one)         : DEL re
 account      / account.invoice          / payment_ids (many2many)       : DEL relation: account.payment
 account      / account.invoice          / payment_move_line_ids (many2many): DEL relation: account.move.line
 account      / account.invoice          / reconciled (boolean)          : DEL
-account      / account.invoice          / refund_invoice_id (many2one)  : DEL relation: account.invoice
 account      / account.invoice          / refund_invoice_ids (one2many) : DEL relation: account.invoice
 
 account      / account.invoice          / tax_line_ids (one2many)       : DEL relation: account.invoice.tax
@@ -301,7 +301,7 @@ account      / account.journal          / post_at_bank_rec (boolean)    : DEL
 
 account      / account.journal          / update_posted (boolean)       : DEL
 account      / account.journal          / restrict_mode_hash_table (boolean): NEW
-# DONE: post-migration: filled restrict_mode_hash_table reusing update_posted
+# NOTHING TO DO: probably better to leave this field to be set directly after migration (see https://github.com/OCA/OpenUpgrade/pull/3086)
 
 account      / account.journal          / secure_sequence_id (many2one) : NEW relation: ir.sequence
 account      / account.journal          / website_message_ids (one2many): NEW relation: mail.message
@@ -323,14 +323,17 @@ account      / account.move             / reverse_date (date)           : DEL
 
 account      / account.move             / currency_id (many2one)        : not a function anymore
 account      / account.move             / currency_id (many2one)        : now required, req_default: function
-# DONE: post-migration: filled empty cases
+# DONE: pre-migration: filled empty cases and add required constraint
 
 account      / account.move             / matched_percentage (float)    : DEL
 # NOTHING TO DO: obsolete fields, replaced by _get_cash_basis_matched_percentage() method
 
 account      / account.move             / reverse_entry_id (many2one)   : DEL relation: account.move
 account      / account.move             / reversed_entry_id (many2one)  : NEW relation: account.move
-# DONE: pre-migration: renamed fields
+account      / account.invoice          / refund_invoice_id (many2one)  : DEL relation: account.invoice
+# DONE: pre-migration: lift FK constraint in reverse_entry_id
+# DONE: post-migration: used refund_invoice_id to fill reversed_entry_id in case is empty (for invoices transformed to moves)
+# DONE: post-migration: used reverse_entry_id to fill reversed_entry_id in case is empty
 
 account      / account.move             / tax_type_domain (char)        : DEL
 # NOTHING TO DO: renamed to invoice_filter_type_domain, but still is non stored
@@ -549,7 +552,7 @@ account      / res.users                / invoice_ids (one2many)        : relati
 account      / res.partner              / customer_rank (integer)       : NEW hasdefault
 account      / res.partner              / supplier_rank (integer)       : NEW hasdefault
 # DONE: pre-migration: precreated columns with default
-# DONE: post-migration: refilled
+# DONE: post-migration: refilled using heuristic and also using old customer/supplier fields
 
 account_voucher / account.voucher          / account_date (date)           : DEL
 account_voucher / account.voucher          / account_id (many2one)         : DEL relation: account.account, required

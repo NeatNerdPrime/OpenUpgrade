@@ -34,7 +34,6 @@ _column_renames = {
 
 _field_renames = [
     ('account.move', 'account_move', 'amount', 'amount_total'),
-    ('account.move', 'account_move', 'reverse_entry_id', 'reversed_entry_id'),
 ]
 
 _field_sale_renames = [
@@ -51,6 +50,16 @@ _table_renames = [
     ('account_register_payments', 'account_payment_register'),
     ('account_analytic_tag_account_reconcile_model_rel',
      'account_reconcile_model_analytic_tag_rel'),
+    ('account_invoice_payment_rel', 'old_account_invoice_payment_rel'),
+]
+
+_field_adds = [
+    ("account_root_id", "account.move.line", "account_move_line", "many2one", False, "account"),
+    ("tax_group_id", "account.move.line", "account_move_line", "many2one", False, "account")
+]
+
+xmlid_renames_payment_terms = [
+    ("account.account_payment_term_net", "account.account_payment_term_30days"),
 ]
 
 
@@ -71,8 +80,7 @@ def type_change_account_fiscal_position_zips(env):
             env.cr,
             "UPDATE %(table)s "
             "SET zip_from = NULL, zip_to = NULL "
-            "WHERE country_id IS NOT NULL AND zip_from = '0' "
-            "AND zip_to = '0'" % {
+            "WHERE zip_from = '0' AND zip_to = '0'" % {
                 'table': table,
             })
 
@@ -147,36 +155,25 @@ def create_account_move_new_columns(env):
             )
 
 
-def fill_account_move_line_parent_state(env):
+def fill_account_move_line(env):
     """Faster way"""
     openupgrade.logged_query(
         env.cr, """
         ALTER TABLE account_move_line
-        ADD COLUMN parent_state varchar""",
-    )
-    openupgrade.logged_query(
-        env.cr, """
-        UPDATE account_move_line aml
-        SET parent_state = am.state
-        FROM account_move am
-        WHERE am.id = aml.move_id""",
-    )
-
-
-def fill_account_move_line_account_internal_type(env):
-    """Faster way"""
-    openupgrade.logged_query(
-        env.cr, """
-        ALTER TABLE account_move_line
+        ADD COLUMN parent_state varchar,
         ADD COLUMN account_internal_type varchar""",
     )
     openupgrade.logged_query(
         env.cr, """
         UPDATE account_move_line aml
-        SET account_internal_type = aat.type
-        FROM account_account aa
-        JOIN account_account_type aat ON aa.user_type_id = aat.id
-        WHERE aml.account_id = aa.id""",
+        SET parent_state = am.state,
+            account_internal_type = aat.type
+        FROM account_move am,
+            account_account aa,
+            account_account_type aat
+        WHERE am.id = aml.move_id
+            AND aa.user_type_id = aat.id
+            AND aml.account_id = aa.id""",
     )
 
 
@@ -226,6 +223,24 @@ def fill_account_move_commercial_partner_id(env):
         FROM res_partner rp
         WHERE am.partner_id = rp.id"""
     )
+
+
+def set_account_move_currency_id_required(env):
+    # with this, we avoid calling _get_default_currency during the load
+    openupgrade.logged_query(
+        env.cr,
+        """
+        UPDATE account_move am
+        SET currency_id = COALESCE(aj.currency_id, rc.currency_id)
+        FROM account_journal aj
+        JOIN res_company rc ON aj.company_id = rc.id
+        WHERE am.journal_id = aj.id AND am.currency_id IS NULL
+        """)
+    openupgrade.logged_query(
+        env.cr,
+        """
+        ALTER TABLE account_move ALTER COLUMN currency_id SET NOT NULL;
+        """)
 
 
 def add_helper_invoice_move_rel(env):
@@ -316,14 +331,17 @@ def migrate(env, version):
         )
     openupgrade.rename_models(cr, _model_renames)
     openupgrade.rename_tables(cr, _table_renames)
+    openupgrade.rename_xmlids(env.cr, xmlid_renames_payment_terms)
+    openupgrade.add_fields(env, _field_adds)
     type_change_account_fiscal_position_zips(env)
     create_account_invoice_amount_tax_company_signed(env)
     create_account_move_new_columns(env)
-    fill_account_move_line_parent_state(env)
-    fill_account_move_line_account_internal_type(env)
+    fill_account_move_line(env)
     create_res_partner_ranks(env)
     delete_fk_constraints(env)
+    openupgrade.lift_constraints(env.cr, "account_move", "reverse_entry_id")
     fill_account_move_commercial_partner_id(env)
+    set_account_move_currency_id_required(env)
     add_helper_invoice_move_rel(env)
     if openupgrade.table_exists(cr, 'account_voucher'):
         add_helper_voucher_move_rel(env)

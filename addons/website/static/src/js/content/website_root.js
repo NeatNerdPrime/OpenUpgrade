@@ -19,6 +19,7 @@ var WebsiteRoot = publicRootData.PublicRoot.extend({
     }),
     custom_events: _.extend({}, publicRootData.PublicRoot.prototype.custom_events || {}, {
         'ready_to_clean_for_save': '_onWidgetsStopRequest',
+        'will_remove_snippet': '_onWidgetsStopRequest',
         seo_object_request: '_onSeoObjectRequest',
     }),
 
@@ -157,7 +158,7 @@ var WebsiteRoot = publicRootData.PublicRoot.extend({
             },
         })
         .then(function (result) {
-            $data.toggleClass("css_unpublished css_published");
+            $data.toggleClass("css_published", result).toggleClass("css_unpublished", !result);
             $data.find('input').prop("checked", result);
             $data.parents("[data-publish]").attr("data-publish", +result ? 'on' : 'off');
         });
@@ -169,12 +170,12 @@ var WebsiteRoot = publicRootData.PublicRoot.extend({
     _onWebsiteSwitch: function (ev) {
         var websiteId = ev.currentTarget.getAttribute('website-id');
         var websiteDomain = ev.currentTarget.getAttribute('domain');
-        var url = window.location.href;
+        let url = `/website/force/${websiteId}`;
         if (websiteDomain && window.location.hostname !== websiteDomain) {
-            var path = window.location.pathname + window.location.search + window.location.hash;
-            url = websiteDomain + path;
+            url = websiteDomain + url;
         }
-        window.location.href = $.param.querystring(url, {'fw': websiteId});
+        const path = window.location.pathname + window.location.search + window.location.hash;
+        window.location.href = $.param.querystring(url, {'path': path});
     },
     /**
      * @private

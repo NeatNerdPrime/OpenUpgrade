@@ -640,13 +640,21 @@ def remove_invoice_table_relations(env):
 
 
 def fill_ir_model_data_noupdate(env):
-    """In previous version, true noupdate data by default was saved as null."""
+    """In previous version, true noupdate data by default was saved as null.
+    See https://github.com/odoo/odoo/commit/8f88570ca18061716fd6e246b9d16aa2cbc24f3a"""
     openupgrade.logged_query(
         env.cr, """
         UPDATE ir_model_data
         SET noupdate = TRUE
-        WHERE noupdate IS NULL"""
+        WHERE noupdate IS NULL AND model != 'ir.model'"""
     )
+    # In Odoo 13.0, ir.model xmlids are noupdate FALSE instead of NULL and are
+    # thus included when cleaning up obsolete data records in _process_end.
+    openupgrade.logged_query(
+        env.cr,
+        """UPDATE ir_model_data
+        SET noupdate=FALSE
+        WHERE model='ir.model' AND noupdate IS NULL""")
 
 
 def remove_offending_translations(env):
@@ -760,6 +768,15 @@ def rename_ir_module_category(env):
         old_row = env.cr.fetchone()
         if old_row:
             if new_row:
+                query = "SELECT parent_id FROM ir_module_category WHERE id = %s"
+                env.cr.execute(query, (new_row[0], ))
+                new_parent_row = env.cr.fetchone()
+                if new_parent_row and new_parent_row[0] == old_row[0]:
+                    # When we already have recursive categories with same name
+                    # (example: Manufacturing/Manufacturing), doing a merge let
+                    # the akward situation where the parent points to itself,
+                    # so we avoid it checking this condition
+                    continue
                 openupgrade_merge_records.merge_records(
                     env, "ir.module.category", [old_row[0]], new_row[0],
                     method="sql", model_table="ir_module_category")
@@ -779,9 +796,15 @@ def migrate(env, version):
         WHERE module='base' AND name='group_user'""",
     )
     openupgrade.update_module_names(
-        env.cr, apriori.renamed_modules.items())
+        env.cr, apriori.renamed_modules.items(), environment_namespec=True
+    )
     openupgrade.update_module_names(
-        env.cr, apriori.merged_modules.items(), merge_modules=True)
+        env.cr,
+        apriori.merged_modules.items(),
+        merge_modules=True,
+        environment_namespec=True,
+    )
+    openupgrade.clean_transient_models(env.cr)
     openupgrade.copy_columns(env.cr, column_copies)
     openupgrade.rename_columns(env.cr, column_renames)
     openupgrade.rename_fields(env, field_renames, no_deep=True)
@@ -805,10 +828,3 @@ def migrate(env, version):
         """ UPDATE ir_model_constraint
         SET write_date = date_update
         WHERE write_date IS NULL AND date_update IS NOT NULL """)
-    # In Odoo 13.0, model xmlids are noupdate FALSE instead of NULL and are
-    # thus included when cleaning up obsolete data records in _process_end.
-    openupgrade.logged_query(
-        env.cr,
-        """UPDATE ir_model_data
-        SET noupdate=FALSE
-        WHERE model='ir.model' AND noupdate IS NULL""")

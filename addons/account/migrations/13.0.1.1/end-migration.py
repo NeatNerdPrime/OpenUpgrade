@@ -21,7 +21,11 @@ def add_default_account_data(env):
              "default_cash_difference_income_account_id"),
         ]:
             chart = company.chart_template_id
-            account_template = chart[chart_field]
+            check_chart = chart
+            account_template = False
+            while not account_template and check_chart:
+                account_template = check_chart[chart_field]
+                check_chart = check_chart.parent_id
             if not account_template:
                 continue
             tmpl_xml_id = account_template.get_external_id()[account_template.id]
@@ -36,11 +40,22 @@ def add_default_account_data(env):
                 if code_main > 0 and code_main <= chart.code_digits:
                     code_acc = str(code_acc) + (
                         str("0" * (chart.code_digits - code_main)))
-                tax_template_ref = {}
-                vals = chart._get_account_vals(
-                    company, account_template, code_acc, tax_template_ref)
-                account = chart._create_records_with_xmlid(
-                    "account.account", [(account_template, vals)], company)
+                account = env['account.account'].search([
+                    ('code', '=', code_acc),
+                    ('company_id', '=', company.id),
+                ], limit=1)
+                # If there's already an account with the same code and company don't create it
+                # as it is not allowed by "account_account_code_company_uniq" constraint.
+                if not account:
+                    tax_template_ref = {}
+                    vals = chart._get_account_vals(
+                        company, account_template, code_acc, tax_template_ref)
+                    account = chart._create_records_with_xmlid(
+                        "account.account", [(account_template, vals)], company)
+                else:
+                    # we add xmlid for such existing account
+                    env["ir.model.data"].sudo()._update_xmlids(
+                        [dict(xml_id=xml_id, noupdate=True, record=account)])
             company[company_field] = account.id
 
 
@@ -49,8 +64,9 @@ def update_mail_alias_for_moves(env):
     journals = env["account.journal"].with_context(
         active_test=False).search([("alias_id", "!=", False)])
     for journal in journals:
+        alias_name = journal.alias_name
         journal.alias_id.unlink()
-        journal._update_mail_alias({"alias_name": journal.alias_name})
+        journal._update_mail_alias({"alias_name": alias_name})
 
 
 @openupgrade.migrate()

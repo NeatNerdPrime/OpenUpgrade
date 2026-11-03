@@ -19,7 +19,7 @@ stock        / product.putaway          / name (char)                   : DEL re
 # NOTHING TO DO: model removed
 
 stock        / product.template         / responsible_id (many2one)     : not stored anymore
-# NOTHING TO DO: non stored
+# DONE: post-migration: convert to company_dependent (filling ir_property)
 
 stock        / res.company              / stock_mail_confirmation_template_id (many2one): NEW relation: mail.template, hasdefault
 stock        / res.company              / stock_move_email_validation (boolean): NEW hasdefault
@@ -125,7 +125,7 @@ stock        / stock.rule               / propagate_date_minimum_delta (integer)
 # DONE: post-migration: match cases using company's old column 'propagation_minimum_delta'
 
 stock        / stock.scrap              / company_id (many2one)         : NEW relation: res.company, required, req_default: function, hasdefault
-# DONE: post-migration: filled the field when empty
+# DONE: post-migration: filled the field ignoring the default value
 
 stock        / stock.scrap              / date_done (datetime)          : NEW
 stock        / stock.scrap              / date_expected (datetime)      : DEL
@@ -273,4 +273,4 @@ DEL stock.location: stock.location_production (noupdate)
 DEL stock.location: stock.stock_location_scrapped (noupdate)
 DEL stock.location: stock.location_procurement (noupdate)
 # DONE: post-migration: mapped them to new locations
-# DONE: post-migration: delete their ir model data
+# DONE: end-migration: delete their ir model data

@@ -4,7 +4,7 @@
 from psycopg2 import OperationalError, Error
 
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import RedirectWarning, UserError, ValidationError
 from odoo.osv import expression
 from odoo.tools.float_utils import float_compare, float_is_zero, float_round
 
@@ -235,7 +235,8 @@ class StockQuant(models.Model):
     @api.constrains('quantity')
     def check_quantity(self):
         for quant in self:
-            if float_compare(quant.quantity, 1, precision_rounding=quant.product_uom_id.rounding) > 0 and quant.lot_id and quant.product_id.tracking == 'serial':
+            if quant.location_id.usage != 'inventory' and quant.lot_id and quant.product_id.tracking == 'serial' \
+                    and float_compare(abs(quant.quantity), 1, precision_rounding=quant.product_uom_id.rounding) > 0:
                 message_base = _('A serial number should only be linked to a single product.')
                 message_quant = _('Please check the following serial number (name, id): ')
                 message_sn = '(%s, %s)' % (quant.lot_id.name, quant.lot_id.id)
@@ -406,8 +407,11 @@ class StockQuant(models.Model):
         if lot_id and quantity > 0:
             quants = quants.filtered(lambda q: q.lot_id)
 
-        incoming_dates = [d for d in quants.mapped('in_date') if d]
-        incoming_dates = [fields.Datetime.from_string(incoming_date) for incoming_date in incoming_dates]
+        if location_id.should_bypass_reservation():
+            incoming_dates = []
+        else:
+            incoming_dates = [quant.in_date for quant in quants if quant.in_date and
+                              float_compare(quant.quantity, 0, precision_rounding=quant.product_uom_id.rounding) > 0]
         if in_date:
             incoming_dates += [in_date]
         # If multiple incoming dates are available for a given lot_id/package_id/owner_id, we
@@ -473,7 +477,16 @@ class StockQuant(models.Model):
             # if we want to unreserve
             available_quantity = sum(quants.mapped('reserved_quantity'))
             if float_compare(abs(quantity), available_quantity, precision_rounding=rounding) > 0:
-                raise UserError(_('It is not possible to unreserve more products of %s than you have in stock.') % product_id.display_name)
+                action_fix_unreserve = self.env.ref(
+                    'stock.stock_quant_stock_move_line_desynchronization', raise_if_not_found=False)
+                if action_fix_unreserve and self.user_has_groups('base.group_system'):
+                    raise RedirectWarning(
+                        _("""It is not possible to unreserve more products of %s than you have in stock.
+The correction could unreserve some operations with problematics products.""") % product_id.display_name,
+                        action_fix_unreserve.id,
+                        _('Automated action to fix it'))
+                else:
+                    raise UserError(_('It is not possible to unreserve more products of %s than you have in stock. Contact an administrator.') % product_id.display_name)
         else:
             return reserved_quants
 
@@ -526,15 +539,17 @@ class StockQuant(models.Model):
                             SELECT min(id) as to_update_quant_id,
                                 (array_agg(id ORDER BY id))[2:array_length(array_agg(id), 1)] as to_delete_quant_ids,
                                 SUM(reserved_quantity) as reserved_quantity,
-                                SUM(quantity) as quantity
+                                SUM(quantity) as quantity,
+                                MIN(in_date) as in_date
                             FROM stock_quant
-                            GROUP BY product_id, company_id, location_id, lot_id, package_id, owner_id, in_date
+                            GROUP BY product_id, company_id, location_id, lot_id, package_id, owner_id
                             HAVING count(id) > 1
                         ),
                         _up AS (
                             UPDATE stock_quant q
                                 SET quantity = d.quantity,
-                                    reserved_quantity = d.reserved_quantity
+                                    reserved_quantity = d.reserved_quantity,
+                                    in_date = d.in_date
                             FROM dupes d
                             WHERE d.to_update_quant_id = q.id
                         )
@@ -613,7 +628,8 @@ class StockQuant(models.Model):
         :param domain: List for the domain, empty by default.
         :param extend: If True, enables form, graph and pivot views. False by default.
         """
-        self._quant_tasks()
+        if not self.env['ir.config_parameter'].sudo().get_param('stock.skip_quant_tasks'):
+            self._quant_tasks()
         ctx = dict(self.env.context or {})
         ctx.pop('group_by', None)
         action = {
@@ -724,7 +740,7 @@ class QuantPackage(models.Model):
         else:
             packs = self.search([('quant_ids', operator, value)])
         if packs:
-            return [('id', 'parent_of', packs.ids)]
+            return [('id', 'in', packs.ids)]
         else:
             return [('id', '=', False)]
 

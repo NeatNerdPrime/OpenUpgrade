@@ -149,8 +149,7 @@ var StatementModel = BasicModel.extend({
 
         return Promise.all([
             this._computeLine(line),
-            this._performMoveLine(handle, 'match_rp', line.mode == 'match_rp'? 1 : 0),
-            this._performMoveLine(handle, 'match_other', line.mode == 'match_other'? 1 : 0)
+            this._performMoveLine(handle, line.mode, 1)
         ]);
     },
     /**
@@ -235,8 +234,9 @@ var StatementModel = BasicModel.extend({
         var line = this.getLine(handle);
         line.st_line.partner_id = partner && partner.id;
         line.st_line.partner_name = partner && partner.display_name || '';
-        line.mv_lines_match_rp = [];
-        line.mv_lines_match_other = [];
+        self.modes.filter(x => x.startsWith('match')).forEach(function (mode) {
+            line["mv_lines_"+mode] = [];
+        });
         return Promise.resolve(partner && this._changePartner(handle, partner.id))
                 .then(function() {
                     if(line.st_line.partner_id){
@@ -751,6 +751,8 @@ var StatementModel = BasicModel.extend({
                         prop.tax_ids = _.filter(prop.tax_ids, function (val) {
                             return val.id !== id;
                         });
+                        // Remove all tax tags, they will be recomputed in case of remaining taxes
+                        prop.tag_ids = [];
                         break;
                 }
             }
@@ -767,7 +769,7 @@ var StatementModel = BasicModel.extend({
                 this._computeReconcileModels(handle, prop.reconcileModelId);
             }
         }
-        if ('force_tax_included' in values || 'amount' in values || 'account_id' in values) {
+        if ('label' in values || 'force_tax_included' in values || 'amount' in values || 'account_id' in values) {
             prop.__tax_to_recompute = true;
         }
         line.createForm = _.pick(prop, this.quickCreateFields);
@@ -993,6 +995,7 @@ var StatementModel = BasicModel.extend({
                                 'link': prop.id,
                                 'tax_ids': tax.tax_ids,
                                 'tax_repartition_line_id': tax.tax_repartition_line_id,
+                                'tax_base_amount': tax.base,
                                 'tag_ids': tax.tag_ids,
                                 'amount': tax.amount,
                                 'label': prop.label ? prop.label + " " + tax.name : tax.name,
@@ -1206,7 +1209,7 @@ var StatementModel = BasicModel.extend({
         line['mv_lines_'+mode] = _.uniq(line['mv_lines_'+mode].concat(mv_lines), l => l.id);
         if (mv_lines[0]){
             line['remaining_'+mode] = mv_lines[0].recs_count - mv_lines.length;
-        } else if (line['mv_lines_'+mode].lenght == 0) {
+        } else if (line['mv_lines_'+mode].length == 0) {
             line['remaining_'+mode] = 0;
         }
         this._formatLineProposition(line, mv_lines);
@@ -1303,6 +1306,7 @@ var StatementModel = BasicModel.extend({
             'tax_ids': this._formatMany2ManyTagsTax(values.tax_ids || []),
             'tag_ids': values.tag_ids,
             'tax_repartition_line_id': values.tax_repartition_line_id,
+            'tax_base_amount': values.tax_base_amount,
             'debit': 0,
             'credit': 0,
             'date': values.date ? values.date : field_utils.parse.date(today, {}, {isUTC: true}),
@@ -1429,6 +1433,7 @@ var StatementModel = BasicModel.extend({
 
         if (prop.tag_ids && prop.tag_ids.length) result.tag_ids = [[6, null, prop.tag_ids]];
         if (prop.tax_repartition_line_id) result.tax_repartition_line_id = prop.tax_repartition_line_id;
+        if (prop.tax_base_amount) result.tax_base_amount = prop.tax_base_amount;
         if (prop.reconcileModelId) result.reconcile_model_id = prop.reconcileModelId
         return result;
     },
@@ -1880,6 +1885,11 @@ var ManualModel = StatementModel.extend({
         var self = this;
         var line = this.getLine(handle);
         line.mv_lines_match = _.uniq((line.mv_lines_match || []).concat(mv_lines), l => l.id);
+        if (mv_lines[0]){
+            line.remaining_match = mv_lines[0].recs_count - mv_lines.length;
+        } else if (line.mv_lines_match.length == 0) {
+            line.remaining_match = 0;
+        }
         this._formatLineProposition(line, mv_lines);
 
         if (line.mode !== 'create' && !line.mv_lines_match.length && !line.filter_match.length) {

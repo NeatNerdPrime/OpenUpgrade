@@ -44,6 +44,8 @@ _xmlid_renames = [
     ('stock.access_stock_fixed_putaway_strat', 'stock.access_stock_putaway_manager'),
     ('stock.access_stock_fixed_putaway_user', 'stock.access_stock_putaway_all'),
     ('stock.access_stock_forecast_user', 'stock.access_report_stock_quantity'),
+    # from stock_production_lot_multi_company module
+    ('stock.production_lot_comp_rule', 'stock.stock_production_lot_rule'),
 ]
 
 
@@ -73,9 +75,30 @@ def fill_inventory_line_categ(env):
     )
 
 
+def prefill_stock_picking_type_sequence_code(env):
+    """Prefill this field for avoiding the not null warning during update."""
+    openupgrade.logged_query(
+        env.cr, "ALTER TABLE stock_picking_type ADD sequence_code VARCHAR"
+    )
+    openupgrade.logged_query(
+        env.cr, "UPDATE stock_picking_type SET sequence_code = '-'"
+    )
+
+
 @openupgrade.migrate()
 def migrate(env, version):
     openupgrade.copy_columns(env.cr, _column_copies)
+    if openupgrade.table_exists(env.cr, 'report_stock_quantity'):
+        # OCA module `stock_forecast_report` was installed
+        # Renaming model and table for not collapsing with the following renames
+        openupgrade.rename_models(
+            env.cr, [("report.stock.quantity", "report.stock.quantity.ou")]
+        )
+        openupgrade.rename_tables(
+            env.cr, [("report_stock_quantity", "report_stock_quantity_ou")]
+        )
+        # Remove duplicated access
+        env.ref("stock.access_report_stock_quantity").unlink()
     openupgrade.rename_models(env.cr, _model_renames)
     openupgrade.rename_tables(env.cr, _table_renames)
     openupgrade.rename_fields(env, _field_renames)
@@ -83,3 +106,4 @@ def migrate(env, version):
     openupgrade.rename_xmlids(env.cr, _xmlid_renames)
     assure_stock_rule_company_is_correct(env)
     fill_inventory_line_categ(env)
+    prefill_stock_picking_type_sequence_code(env)

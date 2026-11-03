@@ -2,6 +2,10 @@
 from openupgradelib import openupgrade
 from psycopg2 import sql
 import uuid
+import logging
+
+
+_logger = logging.getLogger(__name__)
 
 _unlink_by_xmlid = [
     # ir.actions.act_url
@@ -28,7 +32,16 @@ def convert_image_attachments(env):
             ('res_id', '!=', False),
         ])
         for attachment in attachments:
-            Model.browse(attachment.res_id).image_1920 = attachment.datas
+            try:
+                Model.browse(attachment.res_id).image_1920 = attachment.datas
+            except Exception as e:
+                _logger.error(
+                    "Error while recovering %s>%s for %s: %s",
+                    model,
+                    field,
+                    attachment.res_id,
+                    repr(e),
+                )
 
 
 def fill_slide_sequence(env):
@@ -63,14 +76,16 @@ def convert_slide_categories(env):
     openupgrade.logged_query(
         env.cr, sql.SQL("""
         INSERT INTO slide_slide (
-            create_date, create_uid, write_date, write_uid, is_category,
-            name, channel_id, old_category_id, sequence, slide_type
+            active, create_date, create_uid, write_date, write_uid, is_category,
+            name, channel_id, old_category_id, sequence, slide_type, is_published,
+            is_preview
         )
         SELECT
-            sc.create_date, sc.create_uid, sc.write_date, sc.write_uid, True,
-            sc.name, sc.channel_id, sc.id, min(ss.sequence) - 1 as sequence, 'document'
+            True, sc.create_date, sc.create_uid, sc.write_date, sc.write_uid, True,
+            sc.name, sc.channel_id, sc.id, min(ss.sequence) - 1 as sequence, 'document',
+            True, True
         FROM slide_slide ss
-        LEFT JOIN slide_category sc ON sc.id = ss.{category_id}
+        JOIN slide_category sc ON sc.id = ss.{category_id}
         WHERE ss.channel_id IN (
             SELECT channel_id
             FROM slide_slide
@@ -137,17 +152,19 @@ def fill_slide_likes_dislikes_views(env):
     We add fake records here for getting the same numbers that were cumulated
     in previous versions.
     """
+    partner_root = env.ref("base.partner_root")
     openupgrade.logged_query(
         env.cr, sql.SQL("""
         INSERT INTO slide_slide_partner
         (create_uid, create_date, write_uid, write_date,
          slide_id, channel_id, partner_id, vote, completed, quiz_attempts_count)
         SELECT ss.create_uid, ss.create_date, ss.write_uid, ss.write_date,
-            ss.id, ss.channel_id, 1, 1, False, 0
+            ss.id, ss.channel_id, %s, 1, False, 0
         FROM slide_slide ss
         CROSS JOIN generate_series(1, ss.{likes}) AS sub
         WHERE ss.{likes} > 0
-        """).format(likes=sql.Identifier(openupgrade.get_legacy_name("likes")))
+        """).format(likes=sql.Identifier(openupgrade.get_legacy_name("likes"))),
+        (partner_root.id, )
     )
     openupgrade.logged_query(
         env.cr, sql.SQL("""
@@ -155,11 +172,12 @@ def fill_slide_likes_dislikes_views(env):
         (create_uid, create_date, write_uid, write_date,
          slide_id, channel_id, partner_id, vote, completed, quiz_attempts_count)
         SELECT ss.create_uid, ss.create_date, ss.write_uid, ss.write_date,
-            ss.id, ss.channel_id, 1, -1, False, 0
+            ss.id, ss.channel_id, %s, -1, False, 0
         FROM slide_slide ss
         CROSS JOIN generate_series(1, ss.{dislikes}) AS sub
         WHERE ss.{dislikes} > 0
-        """).format(dislikes=sql.Identifier(openupgrade.get_legacy_name("dislikes")))
+        """).format(dislikes=sql.Identifier(openupgrade.get_legacy_name("dislikes"))),
+        (partner_root.id, )
     )
     openupgrade.logged_query(
         env.cr, sql.SQL("""
@@ -167,7 +185,7 @@ def fill_slide_likes_dislikes_views(env):
         (create_uid, create_date, write_uid, write_date,
          slide_id, channel_id, partner_id, vote, completed, quiz_attempts_count)
         SELECT ss.create_uid, ss.create_date, ss.write_uid, ss.write_date,
-            ss.id, ss.channel_id, 1, 0, False, 0
+            ss.id, ss.channel_id, %s, 0, False, 0
         FROM slide_slide ss
         CROSS JOIN generate_series(1, ss.{slide_views} - COALESCE(ss.{likes}, 0) - COALESCE(ss.{dislikes}, 0)) AS sub
         WHERE ss.{slide_views} > 0
@@ -175,7 +193,8 @@ def fill_slide_likes_dislikes_views(env):
             likes=sql.Identifier(openupgrade.get_legacy_name("likes")),
             dislikes=sql.Identifier(openupgrade.get_legacy_name("dislikes")),
             slide_views=sql.Identifier(openupgrade.get_legacy_name("slide_views")),
-        )
+        ),
+        (partner_root.id, )
     )
 
 

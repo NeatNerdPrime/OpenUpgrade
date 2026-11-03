@@ -13,12 +13,15 @@
 # Phuc Tran Thanh <phuctran.odoo@gmail.com>, 2019
 # Trinh Tran Thi Phuong <trinhttp@trobz.com>, 2019
 # Manh Vu <vuducmanh96vp@gmail.com>, 2020
-# Martin Trigaux, 2020
 # Nguyen Duc Hoang <ndhdldt1@gmail.com>, 2020
-# Duy BQ <duybq86@gmail.com>, 2020
 # fanha99 <fanha99@hotmail.com>, 2020
 # Trần Hà <tranthuha13590@gmail.com>, 2021
+# Mountain Tran <mountain.tran@viindoo.com>, 2021
 # Nancy Momoland <thanhnguyen.icsc@gmail.com>, 2021
+# Thinh Doan <thinh.t.doan@gmail.com>, 2022
+# Martin Trigaux, 2022
+# Duy BQ <duybq86@gmail.com>, 2022
+# Thi Huong Nguyen, 2022
 # 
 msgid ""
 msgstr ""
@@ -26,7 +29,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2020-07-01 12:20+0000\n"
 "PO-Revision-Date: 2019-08-26 09:06+0000\n"
-"Last-Translator: Nancy Momoland <thanhnguyen.icsc@gmail.com>, 2021\n"
+"Last-Translator: Thi Huong Nguyen, 2022\n"
 "Language-Team: Vietnamese (https://www.transifex.com/odoo/teams/41243/vi/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -226,7 +229,7 @@ msgstr ""
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.portal_my_home_menu_invoice
 msgid "<em>Draft Invoice</em>"
-msgstr "<em>Công nợ nháp</em>"
+msgstr "<em>Hoá đơn Dự thảo</em>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.account_move_line_view_kanban
@@ -305,12 +308,12 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:account.portal_my_invoices
 msgid ""
 "<span class=\"badge badge-pill badge-info\"><i class=\"fa fa-fw fa-clock-o\""
-" aria-label=\"Opened\" title=\"Opened\" role=\"img\"/><span class=\"d-none d"
-"-md-inline\"> Waiting for Payment</span></span>"
+" aria-label=\"Opened\" title=\"Opened\" role=\"img\"/><span class=\"d-none "
+"d-md-inline\"> Waiting for Payment</span></span>"
 msgstr ""
 "<span class=\"badge badge-pill badge-info\"><i class=\"fa fa-fw fa-clock-o\""
-" aria-label=\"Opened\" title=\"Opened\" role=\"img\"/><span class=\"d-none d"
-"-md-inline\"> Đợi thanh toán</span></span>"
+" aria-label=\"Opened\" title=\"Opened\" role=\"img\"/><span class=\"d-none "
+"d-md-inline\"> Đợi thanh toán</span></span>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.portal_my_invoices
@@ -664,6 +667,11 @@ msgstr "<strong>Công ty:</strong>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
+msgid "<strong>Credit Note Date:</strong>"
+msgstr "<strong>Ngày ghi nợ:</strong>"
+
+#. module: account
+#: model_terms:ir.ui.view,arch_db:account.report_invoice_document
 msgid "<strong>Customer Code:</strong>"
 msgstr "<strong>Mã khách hàng:</strong>"
 
@@ -671,6 +679,11 @@ msgstr "<strong>Mã khách hàng:</strong>"
 #: model_terms:ir.ui.view,arch_db:account.report_payment_receipt_document
 msgid "<strong>Customer: </strong>"
 msgstr "<strong>Khách hàng: </strong>"
+
+#. module: account
+#: model_terms:ir.ui.view,arch_db:account.report_invoice_document
+msgid "<strong>Date:</strong>"
+msgstr "<strong>Ngày:</strong>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
@@ -6045,6 +6058,14 @@ msgstr ""
 #: code:addons/account/models/account.py:0
 #, python-format
 msgid ""
+"Invoice and credit note repartition should have at least one tax repartition"
+" line."
+msgstr "Hóa đơn và credit note nên có cùng thuế suất."
+
+#. module: account
+#: code:addons/account/models/account.py:0
+#, python-format
+msgid ""
 "Invoice and credit note repartition should have the same number of lines."
 msgstr ""
 
@@ -7841,7 +7862,7 @@ msgstr "Hóa đơn gốc"
 #: model_terms:ir.ui.view,arch_db:account.view_move_line_tree
 #: model_terms:ir.ui.view,arch_db:account.view_move_line_tree_grouped
 msgid "Original Currency"
-msgstr ""
+msgstr "Đơn vị tiền tệ gốc"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_line__payment_id
@@ -8885,6 +8906,12 @@ msgstr "Đối soát các phần"
 #: model:ir.actions.client,name:account.action_bank_reconcile
 msgid "Reconciliation on Bank Statements"
 msgstr "Đối soát trên Sổ phụ ngân hàng"
+
+#. module: account
+#: code:addons/account/models/partner.py:0
+#, python-format
+msgid "Record cannot be deleted. Partner used in Accounting"
+msgstr "Bản ghi này không thể xóa. Đối tác đã được sử dụng trong Kế toán."
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
@@ -11618,7 +11645,7 @@ msgid ""
 "-This installs the account_batch_payment module."
 msgstr ""
 "Điều này cho phép bạn nhóm các khoản thanh toán vào một lô duy nhất và giúp giảm bớt quá trình hòa giải.\n"
-"-Điều này cài đặt mô-đun account_batch_payment."
+"-Điều này cài đặt module account_batch_payment."
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_chart_template__complete_tax_set
@@ -13058,7 +13085,7 @@ msgstr "Bạn phải xác định dòng lúc đầu."
 #: code:addons/account/models/account_move.py:0
 #, python-format
 msgid "The entry %s (id %s) is already posted."
-msgstr ""
+msgstr "Bút toán %s (id %s) đã được vào sổ."
 
 #. module: account
 #: code:addons/account/models/account_move.py:0
@@ -13306,6 +13333,8 @@ msgid ""
 " Sales operations should go to 'sale' journals, and purchase operations to "
 "'purchase' ones."
 msgstr ""
+"Sổ nhật ký có loại không phù hợp với loại hóa đơn của bạn. Hoạt động bán "
+"hàng nên là sổ nhật ký 'bán', và hoạt động mua hàng nên là 'mua'."
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_move_form

@@ -73,6 +73,26 @@ def use_new_taxes_and_repartition_lines_on_move_lines(env):
                 FROM account_tax
                 WHERE id IN %%s""" % column, (tuple(tax_ids), ),
             )
+        # A group tax holds no account: its children do. Each tax repartition
+        # line takes the account of its child's one, matched as the move
+        # lines are matched to their repartition line below.
+        for tax_column in ("invoice_tax_id", "refund_tax_id"):
+            openupgrade.logged_query(
+                env.cr, sql.SQL("""
+                UPDATE account_tax_repartition_line atrl2
+                SET account_id = atrl.account_id
+                FROM account_tax_repartition_line atrl
+                JOIN account_tax at ON atrl.{column} = at.id
+                JOIN account_tax_filiation_rel rel ON rel.child_tax = at.id
+                WHERE atrl2.{column} = rel.parent_tax
+                    AND atrl2.repartition_type = 'tax'
+                    AND atrl.repartition_type = 'tax'
+                    AND SIGN(at.amount) = SIGN(atrl2.factor_percent)
+                    AND atrl2.account_id IS NULL
+                    AND rel.parent_tax IN %s
+                """).format(column=sql.Identifier(tax_column)),
+                (tuple(tax_ids), ),
+            )
     if children_tax_ids:
         # assure children taxes are not parent taxes
         openupgrade.logged_query(
@@ -96,12 +116,17 @@ def use_new_taxes_and_repartition_lines_on_move_lines(env):
             WHERE at.id IN %s
             ON CONFLICT DO NOTHING""", (tuple(children_tax_ids), ),
         )
-        openupgrade.logged_query(
-            env.cr, """
-            DELETE FROM account_move_line_account_tax_rel
-            WHERE account_tax_id IN %s
-            """, (tuple(children_tax_ids), ),
-        )
+        other_parents = env["account.tax"].with_context(active_test=False).search(
+            [("children_tax_ids", "in", children_tax_ids)]).filtered(lambda t: t not in taxes_with_children)
+        obsolete_children = [x for x in children_tax_ids if x not in other_parents.mapped(
+            'children_tax_ids').filtered(lambda t: t.id in children_tax_ids).ids]
+        if obsolete_children:
+            openupgrade.logged_query(
+                env.cr, """
+                DELETE FROM account_move_line_account_tax_rel
+                WHERE account_tax_id IN %s
+                """, (tuple(obsolete_children), ),
+            )
         # update account move line tax_repartition_line_id
         for tax_column in ("invoice_tax_id", "refund_tax_id"):
             openupgrade.logged_query(

@@ -1240,10 +1240,10 @@ class Meeting(models.Model):
                 for name, desc in sort_spec
             )
             # then Reverse if the value matches a "desc" column
-            return [
+            return tuple(
                 (tools.Reverse(v) if desc else v)
                 for v, desc in vals_spec
-            ]
+            )
         return [r['id'] for r in sorted(result_data, key=key)]
 
     def _rrule_serialize(self):
@@ -1700,14 +1700,6 @@ class Meeting(models.Model):
             if not isinstance(ls, (str, int)) and len(ls) >= 2:
                 res['start'] = ls[1]
                 res['stop'] = ls[2]
-
-                if res['allday']:
-                    res['start_date'] = ls[1]
-                    res['stop_date'] = ls[2]
-                else:
-                    res['start_datetime'] = ls[1]
-                    res['stop_datetime'] = ls[2]
-
                 if 'display_time' in fields:
                     res['display_time'] = self._get_display_time(ls[1], ls[2], res['duration'], res['allday'])
 
@@ -1737,6 +1729,21 @@ class Meeting(models.Model):
                 if (k in r) and (fields and (k not in fields)):
                     del r[k]
         return result
+
+    def name_get(self):
+        """ Hide private events' name for events which don't belong to the current user
+        """
+        hidden = self.filtered(
+            lambda evt:
+                evt.privacy == 'private' and
+                evt.user_id.id != self.env.uid and
+                self.env.user.partner_id not in evt.partner_ids
+        )
+
+        shown = self - hidden
+        shown_names = super(Meeting, shown).name_get()
+        obfuscated_names = [(eid, _('Busy')) for eid in hidden.ids]
+        return shown_names + obfuscated_names
 
     def unlink(self, can_be_deleted=True):
         # Get concerned attendees to notify them if there is an alarm on the unlinked events,
